@@ -73,9 +73,15 @@ NextFloor:
 	.byte 1
 Debounce:
 	.byte 1
-Emergency:
+Emergency_Mode:
+	.byte 1
+Emergency_Floor:
+	.byte 1
+Emergency_Direction:
 	.byte 1
 Button_pressed:
+	.byte 1
+LED_State:
 	.byte 1
 
 
@@ -101,6 +107,42 @@ RESET:
 	out SPL, r20
 
 	rjmp main
+Check_Emergency:
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 2
+	out SPL, YL
+	out SPH, YH
+	
+	std Y+1, r24
+	std Y+2, r25
+	ldd r16, Y+1 ;Emergency mode
+	ldd r17, Y+2 ;Next floor number
+
+	cpi r16, 1 ;check if emergency mode has been activated
+		breq Emergency_Activated
+Check_Emergency_End:
+	mov r24, r16
+	mov r25, r17
+	adiw Y, 2
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	ret
+Emergency_Activated:
+	lds r17, Emergency_Floor
+;=============================================
+;	insert code for FLASHING LED here
+	ser temp1
+	;out DDR(???), temp1 ;setting the FLASHING LED for output
+;=============================================
+	clr temp1
+	sts Direction, temp1 ;change the direction to 0. (LIFT GOING DOWN)
+	rjmp Check_Emergency_End
+
 OVF0address: ;timer0 overflow
 	in r20, SREG ;r20 is temp 
 	push r20
@@ -119,6 +161,19 @@ OVF0address: ;timer0 overflow
 
 ;=============================================
 ;	insert code for '*' here
+	lds r24, Emergency_Mode
+	mov r25, r21
+	std Y+1, r24
+	std Y+2, r25
+
+	rcall Check_Emergency
+
+	std Y+1, r24 ;store emergency state and Next floor in r24, r25
+	std Y+2, r25
+	ldd r24, Y+1
+	ldd r25, Y+2
+
+	mov r21, r25
 ;=============================================
 
 	lds r24, FloorNumber ;loading Floor number and direction into the stack 
@@ -159,6 +214,18 @@ OVF0address: ;timer0 overflow
 NotSecond:
 	sts TempCounter, r24 ;store TempCounter back into data memory
 	sts TempCounter + 1, r25
+
+	lds r24, Emergency_Mode
+	cpi r24, 1
+		breq Flash_LED
+
+	rjmp endOVF0
+Flash_LED:
+	lds r24, LED_State
+	com r24
+	sts LED_State, r24
+	;out DDR(???), r24
+
 	rjmp endOVF0
 NotSecond2:
 	sts SecondCounter, r24
@@ -527,8 +594,14 @@ start:
 	clear NextFloor
 	clear Direction
 	clear Debounce
-	clear Emergency
+	clear Emergency_Mode
+	clear Emergency_Floor
+	clear Emergency_Direction
 	clear Button_pressed
+	clear LED_State
+
+	ldi temp1, 1
+	sts Emergency_Floor, temp1
 
 	clr r23
 	ldi r20, 0b00000000 ;setting up the timer
