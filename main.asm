@@ -312,7 +312,21 @@ TurnOn1:
 	sts FloorNumber, r24
 	rjmp endOVF0	
 FiveSecondEnd:
-	ld r21, X+
+	ldi xl, low(vartab)
+	ldi xh, high(vartab)
+	movup:
+	ld r17, x+
+	ld r18, x
+	cpi r17, 0
+	breq finmovup ;r17 = r18 because no repeating element therefore
+	;r17 and r18 must contain 0 (buffer 0)
+	st -z, r18 ;overwrite previous number
+	ld r17, x+
+	jmp movup
+	finmovup:
+	ldi xl, low(vartab)
+	ldi xh, high(vartab)
+	ld r21, x
 	sts NextFloor, r21
 	clear FiveSecondCounter
 	rjmp endOVF0
@@ -795,7 +809,7 @@ convert:
 	lsl temp1
 	add temp1, row
 	add temp1, col ; temp1 = row*3 + col
-	subi temp1, -1 ; Add the value of character ë1í
+	subi temp1, -1 ; Add the value of character ÅEÅE
 	jmp convert_end
 letters:
 	ldi temp1, 'A'
