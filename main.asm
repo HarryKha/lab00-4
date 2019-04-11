@@ -123,6 +123,10 @@ Check_Emergency:
 
 	cpi r16, 1 ;check if emergency mode has been activated
 		breq Emergency_Activated
+	push temp1
+	ldi temp1, 0
+	out PORTA, temp1
+	pop temp1
 Check_Emergency_End:
 	mov r24, r16
 	mov r25, r17
@@ -137,11 +141,47 @@ Emergency_Activated:
 	ldi r17, 1
 ;=============================================
 ;	insert code for FLASHING LED here
-	ser temp1
-	;out DDR(???), temp1 ;setting the FLASHING LED for output
+	push temp1
+	ldi temp1, 3
+	out PORTA, temp1
+	pop temp1
 ;=============================================
 	clr temp1
 	sts Direction, temp1 ;change the direction to 0. (LIFT GOING DOWN)
+
+		do_lcd_command 0b00111000 ; 2x5x7
+	rcall sleep_5ms
+	do_lcd_command 0b00111000 ; 2x5x7
+	rcall sleep_1ms
+	do_lcd_command 0b00111000 ; 2x5x7
+	do_lcd_command 0b00111000 ; 2x5x7
+	do_lcd_command 0b00001000 ; display off?
+	do_lcd_command 0b00000001 ; clear display
+	do_lcd_command 0b00000110 ; increment, no display shift
+	do_lcd_command 0b00001110 ; Cursor on, bar, no blink
+
+	;out PORTC, temp1 ; hold value of temp1 also insert display here
+	do_lcd_data 'E'
+	do_lcd_data 'm'
+	do_lcd_data 'e'
+	do_lcd_data 'r'
+	do_lcd_data 'g'
+	do_lcd_data 'e'
+	do_lcd_data 'n'
+	do_lcd_data 'c'
+	do_lcd_data 'y'
+
+	do_lcd_command 0b11000000
+
+	do_lcd_data 'C'
+	do_lcd_data 'a'
+	do_lcd_data 'l'
+	do_lcd_data 'l'
+	do_lcd_data ' '
+	do_lcd_data '0'
+	do_lcd_data '0'
+	do_lcd_data '0'
+
 	rjmp Check_Emergency_End
 
 OVF0address: ;timer0 overflow
@@ -199,7 +239,12 @@ OVF0address: ;timer0 overflow
 	lds r25, Direction
 	std Y+1, r24
 	std Y+2, r25
+	rjmp updatingFloor
+NotSecond:
+	rjmp NotSecond1
 
+
+updatingFloor:
 	rcall updateFloor ;function to update the floor number and direction
 	
 	std Y+1, r24 ;store new floor number and direction in r24, r25
@@ -209,10 +254,14 @@ OVF0address: ;timer0 overflow
 	sts FloorNumber, r24 ;pass r24 and r25 into floor number and direction in data memory
 	sts Direction, r25
 
+	lds r24, Emergency_Mode
+	cpi r24, 1
+	breq endOVF0
+
 	rcall display
 
 	rjmp endOVF0
-NotSecond:
+NotSecond1:
 	sts TempCounter, r24 ;store TempCounter back into data memory
 	sts TempCounter + 1, r25
 
@@ -244,6 +293,20 @@ FiveSecondPause:
 	clr r24
 	sts FloorNumber, r24
 	rjmp endOVF0
+endOVF0:
+	lds r24, FloorNumber ;end of interrupt
+	lds r25, Direction
+	std Y+1, r24
+	std Y+2, r25
+
+	rcall start1 ;function to load the floor number and direction onto the led bars
+
+	pop YL
+	pop YH
+	pop r20
+	out SREG, r20
+	reti
+
 TurnOn1:
 	lds r24, Flashing
 	sts FloorNumber, r24
@@ -333,19 +396,6 @@ display10:
 	do_lcd_data '0'
 	ret
 
-endOVF0:
-	lds r24, FloorNumber ;end of interrupt
-	lds r25, Direction
-	std Y+1, r24
-	std Y+2, r25
-
-	rcall start1 ;function to load the floor number and direction onto the led bars
-
-	pop YL
-	pop YH
-	pop r20
-	out SREG, r20
-	reti
 updateFloor: ;updates the floor number and direction
 	push YL
 	push YH
@@ -388,10 +438,10 @@ main:
 	clr r17 ;arraysize
 	ldi zl, low(number<<1)
 	ldi zh, high(number<<1)
-	ldi yl, low(RAMEND-4) ;4bytes to store local variables
-	ldi yh, high(RAMEND-4) ;assume variable is 1 byte
-	out SPH, yh ;adjust stack pointer to poin to new stack top
-	out SPL, yl
+	;ldi yl, low(RAMEND-4) ;4bytes to store local variables
+	;ldi yh, high(RAMEND-4) ;assume variable is 1 byte
+	;out SPH, yh ;adjust stack pointer to poin to new stack top
+	;out SPL, yl
 
 	ldi r19, 8
 	ldi r18, 0 ;0 is down, 1 is up
@@ -776,6 +826,14 @@ convert_end:
 toggleEmergency:
 	;lds temp1, Emergency_Mode
 	;com temp1
+	lds temp1, Emergency_Mode
+	cpi temp1, 0
+		breq EmergencyOn
+EmergencyOff:
+	clr temp1
+	sts Emergency_Mode, temp1
+	jmp loop
+EmergencyOn:
 	ldi temp1, 1
 	sts Emergency_Mode, temp1
 	jmp loop
