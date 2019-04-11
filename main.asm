@@ -133,7 +133,8 @@ Check_Emergency_End:
 	pop YL
 	ret
 Emergency_Activated:
-	lds r17, Emergency_Floor
+	;lds r17, Emergency_Floor
+	ldi r17, 1
 ;=============================================
 ;	insert code for FLASHING LED here
 	ser temp1
@@ -163,8 +164,8 @@ OVF0address: ;timer0 overflow
 ;	insert code for '*' here
 	lds r24, Emergency_Mode
 	mov r25, r21
-	std Y+1, r24
-	std Y+2, r25
+	std Y+1, r24 ;Emergency mode. 1 = yes, 0 = no
+	std Y+2, r25 ;Next floor number
 
 	rcall Check_Emergency
 
@@ -220,12 +221,13 @@ NotSecond:
 		breq Flash_LED
 
 	rjmp endOVF0
+TurnOn:
+	jmp TurnOn1
 Flash_LED:
 	lds r24, LED_State
 	com r24
 	sts LED_State, r24
 	;out DDR(???), r24
-
 	rjmp endOVF0
 NotSecond2:
 	sts SecondCounter, r24
@@ -242,7 +244,7 @@ FiveSecondPause:
 	clr r24
 	sts FloorNumber, r24
 	rjmp endOVF0
-TurnOn:
+TurnOn1:
 	lds r24, Flashing
 	sts FloorNumber, r24
 	rjmp endOVF0	
@@ -569,6 +571,13 @@ start2:
 
 start:
 
+
+	ldi temp1, PORTADIR ; PA7:4/PA3:0, out/in
+	sts DDRL, temp1
+	ser temp1 ; PORTC is output
+	out DDRC, temp1
+	out PORTC, temp1
+
 	ser r16
 	out DDRF, r16
 	out DDRA, r16
@@ -697,7 +706,7 @@ end:
 loop:
 	ldi cmask, INITCOLMASK ; initial column mask
 	clr col ; initial column
-	colloop:
+colloop:
 	cpi col, 4
 	breq loop ; If all keys are scanned, repeat.
 	sts PORTL, cmask ; Otherwise, scan a column.
@@ -723,6 +732,7 @@ rowloop:
 	jmp rowloop
 nextcol: ; if row scan is over
 	lsl cmask
+	inc cmask
 	inc col ; increase column value
 	jmp colloop ; go to the next column
 convert:
@@ -764,9 +774,10 @@ convert_end:
 		breq toggleEmergency
 	jmp loop ; Restart main loop
 toggleEmergency:
-	lds temp1, Emergency
-	com temp1
-	sts Emergency, temp1
+	;lds temp1, Emergency_Mode
+	;com temp1
+	ldi temp1, 1
+	sts Emergency_Mode, temp1
 	jmp loop
 halt:
 	rjmp halt
